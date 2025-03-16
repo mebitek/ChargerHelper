@@ -5,6 +5,8 @@ import os
 import dbus
 import _thread as thread
 
+from charger_config import ChargerConfig
+
 sys.path.insert(1, "/data/SetupHelper/velib_python")
 from vedbus import VeDbusService, VeDbusItemImport, VeDbusItemExport
 
@@ -16,12 +18,13 @@ class ChargerHelperService:
 
     def __init__(self, servicename, deviceinstance, paths, productname='IP22 VeBus Helper', connection='DBUS',
                  config=None):
+        self.config = config or ChargerConfig()
         self._dbusservice = VeDbusService(servicename, register=False)
         self._paths = paths
 
         # Create the management objects, as specified in the ccgx dbus-api document
         self._dbusservice.add_path('/Mgmt/ProcessName', __file__)
-        self._dbusservice.add_path('/Mgmt/ProcessVersion', "0.1")
+        self._dbusservice.add_path('/Mgmt/ProcessVersion', config.get_version())
         self._dbusservice.add_path('/Mgmt/Connection', connection)
 
         # Create the mandatory objects
@@ -47,32 +50,34 @@ class ChargerHelperService:
         dbus_conn = dbus.SessionBus() if 'DBUS_SESSION_BUS_ADDRESS' in os.environ else dbus.SystemBus()
         ac_input_1 = VeDbusItemImport(dbus_conn, 'com.victronenergy.settings', '/Settings/SystemSetup/AcInput1')
 
-        has_charger = 'com.victronenergy.charger.ttyUSB0' in dbus_conn.list_names()
+        device = self.config.get_device()
+        has_charger = device in dbus_conn.list_names()
 
         if has_charger:
 
-            serial = VeDbusItemImport(dbus_conn, 'com.victronenergy.charger.ttyUSB0', '/Serial')
+            serial = VeDbusItemImport(dbus_conn, device, '/Serial')
             self._dbusservice['/Serial'] = serial.get_value()
 
             self._dbusservice['/Ac/ActiveIn/Connected'] = 1
 
             ac_input_1.set_value(1)
-            current = VeDbusItemImport(dbus_conn, 'com.victronenergy.charger.ttyUSB0', '/Dc/0/Current')
-            voltage = VeDbusItemImport(dbus_conn, 'com.victronenergy.charger.ttyUSB0', '/Dc/0/Voltage')
-            state = VeDbusItemImport(dbus_conn, 'com.victronenergy.charger.ttyUSB0', '/State')
-            temperature = VeDbusItemImport(dbus_conn, 'com.victronenergy.charger.ttyUSB0', '/Dc/0/Temperature')
+            current = VeDbusItemImport(dbus_conn, device, '/Dc/0/Current')
+            voltage = VeDbusItemImport(dbus_conn, device, '/Dc/0/Voltage')
+            state = VeDbusItemImport(dbus_conn, device, '/State')
+            temperature = VeDbusItemImport(dbus_conn, device, '/Dc/0/Temperature')
 
             logging.debug("/State: %s", state.get_value())
             logging.debug("CURRENT %s" % current.get_value())
 
             if current is not None and current.get_value() is not None:
+                grid_voltage = self.config.get_voltage()
                 power = current.get_value() * voltage.get_value()
                 self._dbusservice[ '/Ac/ActiveIn/ActiveInput'] = 0
 
                 self._dbusservice['/Ac/ActiveIn/P'] = power
                 self._dbusservice['/Ac/ActiveIn/L1/P'] = power
-                self._dbusservice['/Ac/ActiveIn/L1/I'] = power / 231
-                self._dbusservice['/Ac/ActiveIn/L1/V'] = 231
+                self._dbusservice['/Ac/ActiveIn/L1/I'] = power / grid_voltage
+                self._dbusservice['/Ac/ActiveIn/L1/V'] = grid_voltage
                 self._dbusservice['/State'] = state.get_value()
                 self._dbusservice['/Dc/0/Voltage'] = voltage.get_value()
                 self._dbusservice['/Dc/0/Current'] = -current.get_value()
@@ -107,8 +112,12 @@ class ChargerHelperService:
         self._dbusservice['/Ac/ActiveIn/L1/V'] = None
 
 def main():
+    config = ChargerConfig()
 
+    # set logging level to include info level entries
     level = logging.INFO
+    if config.get_debug():
+        level = logging.DEBUG
     logging.basicConfig(level=level)
     logging.info(">>>>>>>>>>>>>>>> Tasmota Inverter Starting <<<<<<<<<<<<<<<<")
 
