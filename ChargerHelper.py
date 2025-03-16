@@ -70,7 +70,7 @@ class ChargerHelperService:
             logging.debug("CURRENT %s" % current.get_value())
 
             if current is not None and current.get_value() is not None:
-                grid_voltage = self.config.get_voltage()
+                grid_voltage = flaot(self.config.get_voltage())
                 power = current.get_value() * voltage.get_value()
                 self._dbusservice[ '/Ac/ActiveIn/ActiveInput'] = 0
 
