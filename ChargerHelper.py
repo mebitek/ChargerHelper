@@ -155,7 +155,8 @@ def main():
 
 
             '/UpdateIndex': {'initial': 0}
-        }
+        },
+        config=config
     )
 
     logging.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')
