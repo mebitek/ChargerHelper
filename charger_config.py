@@ -11,7 +11,7 @@ class ChargerConfig:
         if not os.path.exists(config_file):
             sample_config_file = "%s/config.ini" % (os.path.dirname(os.path.realpath(__file__)))
             shutil.copy(sample_config_file, config_file)
-        self.config.read("%s/../config.ini" % (os.path.dirname(os.path.realpath(__file__))))
+        self.config.read("%s/config.ini" % (os.path.dirname(os.path.realpath(__file__))))
 
     def get_device(self):
         return self.config.get('Setup', 'device', fallback="om.victronenergy.charger.ttyUSB0")
